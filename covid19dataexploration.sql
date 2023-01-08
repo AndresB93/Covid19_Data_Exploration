@@ -40,3 +40,12 @@ FROM `covid19-374023.Covid19.covid_deaths`
 WHERE continent is not null
 GROUP BY Location, population
 ORDER BY HighestInfection_Rate desc
+
+-- Showing countries with highest death count per population
+
+SELECT location, MAX(cast(total_deaths as int)) as TotalDeathCount
+FROM `covid19-374023.Covid19.covid_deaths`
+WHERE continent is not null
+GROUP BY Location
+ORDER BY TotalDeathCount desc
+
