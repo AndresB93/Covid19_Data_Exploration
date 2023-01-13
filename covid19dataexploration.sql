@@ -112,7 +112,15 @@ GROUP BY continent
 ORDER BY TotalDeathCount desc
 
 
--- GLOBAL RESULTS
+-- GLOBAL RESULTS without dates
+
+SELECT SUM(new_cases) as total_cases, SUM(CAST(new_deaths as int)) as total_deaths, SUM(CAST(new_deaths as int))/SUM(new_cases)*100 as Death_Rate
+FROM `covid19-374023.Covid19.covid_deaths`
+WHERE continent is not null
+--GROUP BY date
+ORDER BY 1,2
+
+--GLOBAL RESULT with a date (Total)
 
 SELECT date, SUM(new_cases) as total_cases, SUM(CAST(new_deaths as int)) as total_deaths, SUM(CAST(new_deaths as int))/SUM(new_cases)*100 as Death_Rate
 FROM `covid19-374023.Covid19.covid_deaths`
@@ -120,3 +128,88 @@ WHERE continent is not null
 GROUP BY date
 ORDER BY 1,2
 
+-- JOINING TABLES, Exploring the Vaccination data
+
+SELECT * 
+FROM `covid19-374023.Covid19.covid_deaths` dea
+  JOIN `covid19-374023.Covid19.covid_vaccinations`vac
+    ON dea.location = vac.location
+    AND dea.date = vac.date
+
+
+
+-- Total Population vs Vaccinations 
+
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+FROM `covid19-374023.Covid19.covid_deaths` dea
+  JOIN `covid19-374023.Covid19.covid_vaccinations`vac
+    ON dea.location = vac.location
+    AND dea.date = vac.date
+WHERE dea.continent is not null 
+    AND vac.new_vaccinations is not null
+ORDER BY 2,3
+
+--Total Vaccinations adding up each day 
+
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(CAST(vac.new_vaccinations as int)) OVER (PARTITION BY dea.location ORDER BY dea.location, dea.date) as ACUM
+FROM `covid19-374023.Covid19.covid_deaths` dea
+  JOIN `covid19-374023.Covid19.covid_vaccinations`vac
+    ON dea.location = vac.location
+    AND dea.date = vac.date
+WHERE dea.continent is not null 
+    AND vac.new_vaccinations is not null
+ORDER BY 2,3
+
+-- MIX of Total Vaccination vs Population using CTE
+
+With PopvsVac
+as
+(
+Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(CAST(vac.new_vaccinations as INT)) OVER (Partition by dea.Location Order by dea.location, dea.Date) as ACUM
+FROM `covid19-374023.Covid19.covid_deaths` dea
+  JOIN `covid19-374023.Covid19.covid_vaccinations`vac
+	On dea.location = vac.location
+	and dea.date = vac.date
+where dea.continent is not null 
+AND vac.new_vaccinations is not null
+)
+Select *,(ACUM/Population)*100 as MIX 
+From PopvsVac
+
+
+-- Using Temp Table to perform Calculation on Partition By in previous query
+
+DROP Table if exists PercentPopulationVaccinated
+CREATE TABLE PercentPopulationVaccinated
+(
+Continent nvarchar(255),
+Location nvarchar(255),
+Date datetime,
+Population numeric,
+New_vaccinations numeric,
+RollingPeopleVaccinated numeric
+)
+
+Insert into PercentPopulationVaccinated
+Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(CAST(vac.new_vaccinations as int)) OVER (Partition by dea.Location Order by dea.location, dea.Date) as RollingPeopleVaccinated
+FROM `covid19-374023.Covid19.covid_deaths` dea
+  JOIN `covid19-374023.Covid19.covid_vaccinations`vac
+	On dea.location = vac.location
+	and dea.date = vac.date
+
+Select *, (RollingPeopleVaccinated/Population)*100
+From PercentPopulationVaccinated
+
+-- Creating View to store data for later visualizations
+
+Create View PercentPopulationVaccinated as
+Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(CONVERT(int,vac.new_vaccinations)) OVER (Partition by dea.Location Order by dea.location, dea.Date) as RollingPeopleVaccinated
+FROM `covid19-374023.Covid19.covid_deaths` dea
+  JOIN `covid19-374023.Covid19.covid_vaccinations`vac
+	On dea.location = vac.location
+	and dea.date = vac.date
+where dea.continent is not null 
